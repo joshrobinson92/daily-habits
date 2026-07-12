@@ -368,5 +368,25 @@ export const habitsRepository = {
       console.error("Failed to update scripture chapter:", error);
       return [];
     }
+  },
+
+  /**
+   * Pushes the current local habits cache and history to the cloud
+   */
+  async syncLocalDataToCloud(): Promise<void> {
+    try {
+      const localHabitsStr = await AsyncStorage.getItem(HABITS_STORAGE_KEY);
+      const habits: Habit[] = localHabitsStr ? JSON.parse(localHabitsStr) : [];
+      
+      const localHistoryStr = await AsyncStorage.getItem(HISTORY_STORAGE_KEY);
+      const history: HabitsHistory = localHistoryStr ? JSON.parse(localHistoryStr) : {};
+
+      if (habits.length > 0 || Object.keys(history).length > 0) {
+        await syncToFirebase(habits, history);
+        console.log("Local habits sync pushed successfully.");
+      }
+    } catch (error) {
+      console.error("Failed to force local to cloud sync:", error);
+    }
   }
 };

@@ -18,6 +18,7 @@ import { HabitCard } from "./src/components/HabitCard";
 import { HabitCreator } from "./src/components/HabitCreator";
 import { HistoryDashboard } from "./src/components/HistoryDashboard";
 import { AuthSync } from "./src/components/AuthSync";
+import { auth } from "./src/services/firebase";
 import { COLORS, GLASS_STYLE } from "./src/styles/theme";
 
 export default function App() {
@@ -44,6 +45,11 @@ export default function App() {
       setHabits(habitsList);
       setHistory(historyLog);
       
+      // If user is authenticated, sync local cached data to Firestore
+      if (auth?.currentUser) {
+        await habitsRepository.syncLocalDataToCloud();
+      }
+
       // Update widgets with the latest state
       await setWidgetData(habitsList, historyLog);
       await reloadAllWidgets();
