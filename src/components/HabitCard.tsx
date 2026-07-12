@@ -8,7 +8,9 @@ import { COLORS, GLASS_STYLE } from "../styles/theme";
 interface HabitCardProps {
   habit: Habit;
   isCompleted: boolean;
+  completedSubtasks: string[];
   onToggle: () => void;
+  onToggleSubtask: (subtaskId: string) => void;
   onDelete: () => void;
   onAdjustScripture: (direction: "next" | "prev") => void;
 }
@@ -16,7 +18,9 @@ interface HabitCardProps {
 export const HabitCard: React.FC<HabitCardProps> = ({
   habit,
   isCompleted,
+  completedSubtasks = [],
   onToggle,
+  onToggleSubtask,
   onDelete,
   onAdjustScripture
 }) => {
@@ -102,6 +106,60 @@ export const HabitCard: React.FC<HabitCardProps> = ({
             >
               <ChevronRight size={16} color={COLORS.textPrimary} />
             </TouchableOpacity>
+          </View>
+        </View>
+      )}
+
+      {/* Subtasks Section */}
+      {habit.subtasks && habit.subtasks.length > 0 && (
+        <View style={styles.subtasksSection}>
+          <View style={styles.subtasksProgressRow}>
+            <Text style={styles.subtasksProgressText}>
+              {completedSubtasks.length} of {habit.subtasks.length} subtasks done
+            </Text>
+            <View style={styles.progressBarBg}>
+              <View 
+                style={[
+                  styles.progressBarFill, 
+                  { 
+                    width: `${(completedSubtasks.length / habit.subtasks.length) * 100}%`,
+                    backgroundColor: accentColor
+                  }
+                ]} 
+              />
+            </View>
+          </View>
+          
+          <View style={styles.subtasksList}>
+            {habit.subtasks.map((sub) => {
+              const isSubCompleted = completedSubtasks.includes(sub.id);
+              return (
+                <TouchableOpacity
+                  key={sub.id}
+                  style={styles.subtaskItem}
+                  onPress={() => onToggleSubtask(sub.id)}
+                  activeOpacity={0.7}
+                >
+                  <View 
+                    style={[
+                      styles.subtaskCheckbox,
+                      { borderColor: accentColor + "60" },
+                      isSubCompleted && { backgroundColor: accentColor, borderColor: accentColor }
+                    ]}
+                  >
+                    {isSubCompleted && <Check size={10} color="#000000" strokeWidth={4} />}
+                  </View>
+                  <Text 
+                    style={[
+                      styles.subtaskText,
+                      isSubCompleted && { color: COLORS.textSecondary, textDecorationLine: "line-through" }
+                    ]}
+                  >
+                    {sub.title}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
           </View>
         </View>
       )}
@@ -241,5 +299,56 @@ const styles = StyleSheet.create({
   },
   deleteButton: {
     padding: 6,
+  },
+  subtasksSection: {
+    marginTop: 14,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: COLORS.borderLight,
+  },
+  subtasksProgressRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 10,
+  },
+  subtasksProgressText: {
+    color: COLORS.textSecondary,
+    fontSize: 12,
+    fontWeight: "500",
+  },
+  progressBarBg: {
+    flex: 1,
+    height: 4,
+    backgroundColor: "rgba(255, 255, 255, 0.05)",
+    borderRadius: 2,
+    marginLeft: 12,
+    overflow: "hidden",
+  },
+  progressBarFill: {
+    height: "100%",
+    borderRadius: 2,
+  },
+  subtasksList: {
+    gap: 8,
+  },
+  subtaskItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: 4,
+  },
+  subtaskCheckbox: {
+    width: 18,
+    height: 18,
+    borderRadius: 4,
+    borderWidth: 1.5,
+    justifyContent: "center",
+    alignItems: "center",
+    marginRight: 8,
+  },
+  subtaskText: {
+    color: COLORS.textPrimary,
+    fontSize: 13,
+    fontWeight: "500",
   }
 });

@@ -81,6 +81,19 @@ export default function App() {
     await reloadAllWidgets();
   };
 
+  const handleToggleSubtask = async (habitId: string, subtaskId: string) => {
+    const todayStr = getTodayStr();
+    const { habits: updatedHabits, history: updatedHistory } = 
+      await habitsRepository.toggleSubtaskCompletion(habitId, subtaskId, todayStr);
+      
+    setHabits(updatedHabits);
+    setHistory(updatedHistory);
+
+    // Sync to widgets
+    await setWidgetData(updatedHabits, updatedHistory);
+    await reloadAllWidgets();
+  };
+
   const handleAdjustScripture = async (habitId: string, direction: "next" | "prev") => {
     const updatedHabits = await habitsRepository.updateScriptureChapter(habitId, direction);
     setHabits(updatedHabits);
@@ -113,6 +126,7 @@ export default function App() {
     scriptureVolume?: string;
     scriptureBook?: string;
     scriptureChapter?: number;
+    subtasks?: { id: string; title: string }[];
   }) => {
     const id = `habit-${Date.now()}`;
     
@@ -132,6 +146,7 @@ export default function App() {
       scriptureVolume: habitData.scriptureVolume,
       scriptureBook: habitData.scriptureBook,
       scriptureChapter: habitData.scriptureChapter,
+      subtasks: habitData.subtasks,
       streak: 0,
       createdAt: Date.now()
     };
@@ -202,12 +217,15 @@ export default function App() {
 
         {habits.map((habit) => {
           const isCompleted = !!history[todayStr]?.[habit.id]?.completed;
+          const completedSubtasks = history[todayStr]?.[habit.id]?.completedSubtasks || [];
           return (
             <HabitCard
               key={habit.id}
               habit={habit}
               isCompleted={isCompleted}
+              completedSubtasks={completedSubtasks}
               onToggle={() => handleToggleHabit(habit.id)}
+              onToggleSubtask={(subId) => handleToggleSubtask(habit.id, subId)}
               onDelete={() => handleDeleteHabit(habit)}
               onAdjustScripture={(dir) => handleAdjustScripture(habit.id, dir)}
             />

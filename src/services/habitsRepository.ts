@@ -6,6 +6,11 @@ import { doc, setDoc, getDoc, collection, getDocs, updateDoc, deleteDoc } from "
 const HABITS_STORAGE_KEY = "@habits_list";
 const HISTORY_STORAGE_KEY = "@habits_history";
 
+export interface SubTask {
+  id: string;
+  title: string;
+}
+
 export interface Habit {
   id: string;
   title: string;
@@ -16,6 +21,7 @@ export interface Habit {
   scriptureVolume?: string; // "bofm", "nt", "ot", etc.
   scriptureBook?: string; // "1-ne", "matt", etc.
   scriptureChapter?: number; // 1, 2, ...
+  subtasks?: SubTask[];
   streak: number;
   lastCompletedDate?: string; // "YYYY-MM-DD"
   createdAt: number;
@@ -26,6 +32,7 @@ export interface CompletionDetail {
   completedChapter?: string; // e.g. "Alma 30" or section number
   completedBook?: string;    // e.g. "alma"
   completedVolume?: string;  // e.g. "bofm"
+  completedSubtasks?: string[]; // list of completed subtask IDs
 }
 
 export interface HabitsHistory {
@@ -260,6 +267,11 @@ export const habitsRepository = {
         // Complete the habit
         const detail: CompletionDetail = { completed: true };
 
+        // If the habit has subtasks, mark all of them as completed
+        if (habit.subtasks && habit.subtasks.length > 0) {
+          detail.completedSubtasks = habit.subtasks.map(s => s.id);
+        }
+
         if (habit.isScriptureSync && habit.scriptureVolume && habit.scriptureBook && habit.scriptureChapter) {
           // Store completion details so we can revert it later if unchecked
           detail.completedVolume = habit.scriptureVolume;
@@ -277,7 +289,6 @@ export const habitsRepository = {
             habit.scriptureBook = nextPos.bookSlug;
             habit.scriptureChapter = nextPos.chapter;
           } else {
-            // Volume completed! We keep the current chapter but mark completed (or wrap around if they edit it)
             console.log(`Scripture volume ${habit.scriptureVolume} completed!`);
           }
         }
@@ -290,7 +301,7 @@ export const habitsRepository = {
           // Revert current target back to the completed details of this date
           const compVolume = history[dateString][habitId].completedVolume;
           const compBook = history[dateString][habitId].completedBook;
-          const compChapterStr = history[dateString][habitId].completedChapter; // e.g., "alma 30"
+          const compChapterStr = history[dateString][habitId].completedChapter;
           
           if (compVolume && compBook && compChapterStr) {
             const parts = compChapterStr.split(" ");
@@ -322,6 +333,121 @@ export const habitsRepository = {
       return { habits, history };
     } catch (error) {
       console.error("Failed to toggle habit completion:", error);
+      const habits = await this.getHabits();
+      const history = await this.getHistory();
+      return { habits, history };
+    }
+  },
+
+  /**
+   * Toggles completion status of a specific subtask.
+   * Auto-completes the parent habit if all subtasks are finished.
+   */
+  async toggleSubtaskCompletion(
+    habitId: string,
+    subtaskId: string,
+    dateString: string
+  ): Promise<{ habits: Habit[]; history: HabitsHistory }> {
+    try {
+      const habits = await this.getHabits();
+      const history = await this.getHistory();
+      const habit = habits.find(h => h.id === habitId);
+
+      if (!habit || !habit.subtasks || habit.subtasks.length === 0) {
+        return { habits, history };
+      }
+
+      if (!history[dateString]) {
+        history[dateString] = {};
+      }
+
+      let detail = history[dateString][habitId];
+      if (!detail) {
+        detail = { completed: false, completedSubtasks: [] };
+      }
+      if (!detail.completedSubtasks) {
+        detail.completedSubtasks = [];
+      }
+
+      const subtaskIdx = detail.completedSubtasks.indexOf(subtaskId);
+      const wasCompleted = detail.completed;
+
+      if (subtaskIdx === -1) {
+        // Check subtask
+        detail.completedSubtasks.push(subtaskId);
+      } else {
+        // Uncheck subtask
+        detail.completedSubtasks.splice(subtaskIdx, 1);
+      }
+
+      // The main habit is complete if all subtasks are checked
+      const allComplete = detail.completedSubtasks.length === habit.subtasks.length;
+
+      if (allComplete && !wasCompleted) {
+        detail.completed = true;
+        habit.lastCompletedDate = dateString;
+
+        // Auto-advance scripture sync if enabled
+        if (habit.isScriptureSync && habit.scriptureVolume && habit.scriptureBook && habit.scriptureChapter) {
+          detail.completedVolume = habit.scriptureVolume;
+          detail.completedBook = habit.scriptureBook;
+          detail.completedChapter = `${habit.scriptureBook} ${habit.scriptureChapter}`;
+
+          const nextPos = getNextChapter({
+            volumeSlug: habit.scriptureVolume,
+            bookSlug: habit.scriptureBook,
+            chapter: habit.scriptureChapter
+          });
+
+          if (nextPos) {
+            habit.scriptureBook = nextPos.bookSlug;
+            habit.scriptureChapter = nextPos.chapter;
+          }
+        }
+      } else if (!allComplete && wasCompleted) {
+        detail.completed = false;
+
+        // Revert scripture sync target if enabled
+        if (habit.isScriptureSync && detail.completedChapter) {
+          const compVolume = detail.completedVolume;
+          const compBook = detail.completedBook;
+          const compChapterStr = detail.completedChapter;
+          
+          if (compVolume && compBook && compChapterStr) {
+            const parts = compChapterStr.split(" ");
+            const chapterNum = parseInt(parts[parts.length - 1], 10);
+            if (!isNaN(chapterNum)) {
+              habit.scriptureVolume = compVolume;
+              habit.scriptureBook = compBook;
+              habit.scriptureChapter = chapterNum;
+            }
+          }
+        }
+      }
+
+      // If no subtasks are completed and main is unchecked, remove log to keep clean
+      if (detail.completedSubtasks.length === 0 && !detail.completed) {
+        delete history[dateString][habitId];
+        if (Object.keys(history[dateString]).length === 0) {
+          delete history[dateString];
+        }
+      } else {
+        history[dateString][habitId] = detail;
+      }
+
+      // Recompute streak
+      habit.streak = calculateStreak(habitId, history);
+
+      // Save
+      await AsyncStorage.setItem(HABITS_STORAGE_KEY, JSON.stringify(habits));
+      await AsyncStorage.setItem(HISTORY_STORAGE_KEY, JSON.stringify(history));
+      
+      // Sync
+      await syncToFirebase(habits, history);
+
+      return { habits, history };
+    } catch (error) {
+      console.error("Failed to toggle subtask completion:", error);
       const habits = await this.getHabits();
       const history = await this.getHistory();
       return { habits, history };

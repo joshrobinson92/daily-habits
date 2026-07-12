@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { View, Text, StyleSheet, TextInput, TouchableOpacity, ScrollView, Platform } from "react-native";
-import { SCRIPTURE_VOLUMES, SCRIPTURE_VOLUMES as volumes } from "../services/scriptures";
+import { Plus, X } from "lucide-react-native";
+import { SCRIPTURE_VOLUMES } from "../services/scriptures";
 import { COLORS, GLASS_STYLE } from "../styles/theme";
 
 interface HabitCreatorProps {
@@ -12,6 +13,7 @@ interface HabitCreatorProps {
     scriptureVolume?: string;
     scriptureBook?: string;
     scriptureChapter?: number;
+    subtasks?: { id: string; title: string }[];
   }) => void;
   onCancel: () => void;
 }
@@ -31,6 +33,10 @@ export const HabitCreator: React.FC<HabitCreatorProps> = ({ onSave, onCancel }) 
   const [selectedBookIdx, setSelectedBookIdx] = useState(0);
   const [selectedChapter, setSelectedChapter] = useState(1);
 
+  // Subtasks state
+  const [subtasksList, setSubtasksList] = useState<string[]>([]);
+  const [subtaskInput, setSubtaskInput] = useState("");
+
   const selectedVolume = SCRIPTURE_VOLUMES[selectedVolumeIdx];
   const selectedBook = selectedVolume?.books[selectedBookIdx];
 
@@ -44,6 +50,16 @@ export const HabitCreator: React.FC<HabitCreatorProps> = ({ onSave, onCancel }) 
   useEffect(() => {
     setSelectedChapter(1);
   }, [selectedBookIdx]);
+
+  const handleAddSubtask = () => {
+    if (!subtaskInput.trim()) return;
+    setSubtasksList([...subtasksList, subtaskInput.trim()]);
+    setSubtaskInput("");
+  };
+
+  const handleRemoveSubtask = (index: number) => {
+    setSubtasksList(subtasksList.filter((_, i) => i !== index));
+  };
 
   // Generate lists for pickers
   const hours = Array.from({ length: 24 }, (_, i) => String(i).padStart(2, "0"));
@@ -67,7 +83,10 @@ export const HabitCreator: React.FC<HabitCreatorProps> = ({ onSave, onCancel }) 
       isScriptureSync,
       scriptureVolume: isScriptureSync ? selectedVolume.slug : undefined,
       scriptureBook: isScriptureSync ? selectedBook.slug : undefined,
-      scriptureChapter: isScriptureSync ? selectedChapter : undefined
+      scriptureChapter: isScriptureSync ? selectedChapter : undefined,
+      subtasks: subtasksList.length > 0 
+        ? subtasksList.map((item, idx) => ({ id: `sub-${Date.now()}-${idx}`, title: item }))
+        : undefined
     });
   };
 
@@ -111,6 +130,41 @@ export const HabitCreator: React.FC<HabitCreatorProps> = ({ onSave, onCancel }) 
             </TouchableOpacity>
           ))}
         </View>
+      </View>
+
+      {/* Subtasks Configuration (Optional) */}
+      <View style={[styles.section, GLASS_STYLE]}>
+        <Text style={styles.label}>Subtasks (Optional)</Text>
+        <Text style={styles.subtaskHelp}>Break your daily routine down into a smaller checklist.</Text>
+        
+        <View style={styles.subtaskInputRow}>
+          <TextInput
+            style={[styles.input, { flex: 1, marginRight: 8 }]}
+            placeholder="e.g. Brush teeth"
+            placeholderTextColor={COLORS.textSecondary}
+            value={subtaskInput}
+            onChangeText={setSubtaskInput}
+          />
+          <TouchableOpacity 
+            style={[styles.addSubtaskBtn, { backgroundColor: COLORS.accentHabit }]}
+            onPress={handleAddSubtask}
+          >
+            <Plus size={18} color="#000000" strokeWidth={3} />
+          </TouchableOpacity>
+        </View>
+
+        {subtasksList.length > 0 && (
+          <View style={styles.subtaskList}>
+            {subtasksList.map((item, idx) => (
+              <View key={idx} style={styles.subtaskItemRow}>
+                <Text style={styles.subtaskItemText}>{item}</Text>
+                <TouchableOpacity onPress={() => handleRemoveSubtask(idx)}>
+                  <X size={16} color={COLORS.accentDanger} />
+                </TouchableOpacity>
+              </View>
+            ))}
+          </View>
+        )}
       </View>
 
       {/* Scripture Sync Option */}
@@ -473,5 +527,41 @@ const styles = StyleSheet.create({
     color: "#000000",
     fontWeight: "bold",
     fontSize: 14,
+  },
+  subtaskHelp: {
+    color: COLORS.textSecondary,
+    fontSize: 12,
+    marginBottom: 10,
+    marginTop: -6,
+  },
+  subtaskInputRow: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  addSubtaskBtn: {
+    width: 44,
+    height: 44,
+    borderRadius: 8,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  subtaskList: {
+    marginTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: COLORS.borderLight,
+    paddingTop: 6,
+  },
+  subtaskItemRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: "rgba(255, 255, 255, 0.02)",
+  },
+  subtaskItemText: {
+    color: COLORS.textPrimary,
+    fontSize: 14,
+    fontWeight: "500",
   }
 });

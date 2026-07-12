@@ -28,9 +28,16 @@ export async function setWidgetData(habits: any[], history: any): Promise<boolea
   // Compile clean summary payload for the widgets
   const widgetPayload: WidgetHabitInfo[] = habits.map(h => {
     const isCompleted = !!history[todayStr]?.[h.id]?.completed;
+    
+    let displayTitle = h.title;
+    if (h.subtasks && h.subtasks.length > 0) {
+      const completedSubCount = history[todayStr]?.[h.id]?.completedSubtasks?.length || 0;
+      displayTitle = `${h.title} (${completedSubCount}/${h.subtasks.length})`;
+    }
+
     const info: WidgetHabitInfo = {
       id: h.id,
-      title: h.title,
+      title: displayTitle,
       isCompleted,
       streak: h.streak,
       isScripture: !!h.isScriptureSync
