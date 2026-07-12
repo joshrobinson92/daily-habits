@@ -4,7 +4,10 @@ import { Plus, X } from "lucide-react-native";
 import { SCRIPTURE_VOLUMES } from "../services/scriptures";
 import { COLORS, GLASS_STYLE } from "../styles/theme";
 
+import { Habit } from "../services/habitsRepository";
+
 interface HabitCreatorProps {
+  existingHabit?: Habit;
   onSave: (habitData: {
     title: string;
     frequency: "daily" | "weekly" | "monthly";
@@ -18,36 +21,69 @@ interface HabitCreatorProps {
   onCancel: () => void;
 }
 
-export const HabitCreator: React.FC<HabitCreatorProps> = ({ onSave, onCancel }) => {
-  const [title, setTitle] = useState("");
-  const [frequency, setFrequency] = useState<"daily" | "weekly" | "monthly">("daily");
+export const HabitCreator: React.FC<HabitCreatorProps> = ({ existingHabit, onSave, onCancel }) => {
+  const [title, setTitle] = useState(existingHabit ? existingHabit.title : "");
+  const [frequency, setFrequency] = useState<"daily" | "weekly" | "monthly">(
+    existingHabit ? existingHabit.frequency : "daily"
+  );
   
   // Notification / Reminder config
-  const [enableReminder, setEnableReminder] = useState(false);
-  const [reminderHour, setReminderHour] = useState("08");
-  const [reminderMinute, setReminderMinute] = useState("00");
+  const [enableReminder, setEnableReminder] = useState(existingHabit ? !!existingHabit.reminderTime : false);
+  const [reminderHour, setReminderHour] = useState(
+    existingHabit && existingHabit.reminderTime ? existingHabit.reminderTime.split(":")[0] : "08"
+  );
+  const [reminderMinute, setReminderMinute] = useState(
+    existingHabit && existingHabit.reminderTime ? existingHabit.reminderTime.split(":")[1] : "00"
+  );
 
   // Scripture Sync config
-  const [isScriptureSync, setIsScriptureSync] = useState(false);
-  const [selectedVolumeIdx, setSelectedVolumeIdx] = useState(0);
-  const [selectedBookIdx, setSelectedBookIdx] = useState(0);
-  const [selectedChapter, setSelectedChapter] = useState(1);
+  const getInitialScriptureIndices = () => {
+    if (!existingHabit || !existingHabit.isScriptureSync) {
+      return { volumeIdx: 0, bookIdx: 0, chapter: 1 };
+    }
+    const volIdx = SCRIPTURE_VOLUMES.findIndex(v => v.slug === existingHabit.scriptureVolume);
+    const volume = SCRIPTURE_VOLUMES[volIdx > -1 ? volIdx : 0];
+    const bkIdx = volume.books.findIndex(b => b.slug === existingHabit.scriptureBook);
+    return {
+      volumeIdx: volIdx > -1 ? volIdx : 0,
+      bookIdx: bkIdx > -1 ? bkIdx : 0,
+      chapter: existingHabit.scriptureChapter || 1
+    };
+  };
+
+  const initialScriptures = getInitialScriptureIndices();
+
+  const [isScriptureSync, setIsScriptureSync] = useState(existingHabit ? existingHabit.isScriptureSync : false);
+  const [selectedVolumeIdx, setSelectedVolumeIdx] = useState(initialScriptures.volumeIdx);
+  const [selectedBookIdx, setSelectedBookIdx] = useState(initialScriptures.bookIdx);
+  const [selectedChapter, setSelectedChapter] = useState(initialScriptures.chapter);
 
   // Subtasks state
-  const [subtasksList, setSubtasksList] = useState<string[]>([]);
+  const [subtasksList, setSubtasksList] = useState<string[]>(
+    existingHabit && existingHabit.subtasks ? existingHabit.subtasks.map(s => s.title) : []
+  );
   const [subtaskInput, setSubtaskInput] = useState("");
 
   const selectedVolume = SCRIPTURE_VOLUMES[selectedVolumeIdx];
   const selectedBook = selectedVolume?.books[selectedBookIdx];
 
+  const isFirstRender = React.useRef(true);
+
   // Auto-reset book/chapter selectors when volume changes
   useEffect(() => {
+    if (isFirstRender.current) {
+      return;
+    }
     setSelectedBookIdx(0);
     setSelectedChapter(1);
   }, [selectedVolumeIdx]);
 
   // Auto-reset chapter when book changes
   useEffect(() => {
+    if (isFirstRender.current) {
+      isFirstRender.current = false;
+      return;
+    }
     setSelectedChapter(1);
   }, [selectedBookIdx]);
 
@@ -85,14 +121,17 @@ export const HabitCreator: React.FC<HabitCreatorProps> = ({ onSave, onCancel }) 
       scriptureBook: isScriptureSync ? selectedBook.slug : undefined,
       scriptureChapter: isScriptureSync ? selectedChapter : undefined,
       subtasks: subtasksList.length > 0 
-        ? subtasksList.map((item, idx) => ({ id: `sub-${Date.now()}-${idx}`, title: item }))
+        ? subtasksList.map((item, idx) => {
+            const existing = existingHabit?.subtasks?.find(s => s.title === item);
+            return { id: existing ? existing.id : `sub-${Date.now()}-${idx}`, title: item };
+          })
         : undefined
     });
   };
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
-      <Text style={styles.header}>Create New Habit</Text>
+      <Text style={styles.header}>{existingHabit ? "Edit Habit" : "Create New Habit"}</Text>
 
       {/* Habit Title Input */}
       <View style={[styles.section, GLASS_STYLE]}>

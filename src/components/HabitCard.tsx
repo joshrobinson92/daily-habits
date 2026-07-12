@@ -1,6 +1,6 @@
 import React from "react";
 import { View, Text, StyleSheet, TouchableOpacity, Linking, Platform } from "react-native";
-import { Flame, BookOpen, Bell, ChevronLeft, ChevronRight, Check, Trash2 } from "lucide-react-native";
+import { Flame, BookOpen, Bell, ChevronLeft, ChevronRight, Check, Trash2, Pencil } from "lucide-react-native";
 import { Habit } from "../services/habitsRepository";
 import { getReadingUrl, getScriptureNames } from "../services/scriptures";
 import { COLORS, GLASS_STYLE } from "../styles/theme";
@@ -11,6 +11,7 @@ interface HabitCardProps {
   completedSubtasks: string[];
   onToggle: () => void;
   onToggleSubtask: (subtaskId: string) => void;
+  onEdit: () => void;
   onDelete: () => void;
   onAdjustScripture: (direction: "next" | "prev") => void;
 }
@@ -21,6 +22,7 @@ export const HabitCard: React.FC<HabitCardProps> = ({
   completedSubtasks = [],
   onToggle,
   onToggleSubtask,
+  onEdit,
   onDelete,
   onAdjustScripture
 }) => {
@@ -178,13 +180,23 @@ export const HabitCard: React.FC<HabitCardProps> = ({
           </Text>
         </View>
 
-        <TouchableOpacity 
-          onPress={onDelete} 
-          style={styles.deleteButton}
-          activeOpacity={0.6}
-        >
-          <Trash2 size={15} color={COLORS.accentDanger} />
-        </TouchableOpacity>
+        <View style={styles.actionButtons}>
+          <TouchableOpacity 
+            onPress={onEdit} 
+            style={[styles.actionBtn, { marginRight: 12 }]}
+            activeOpacity={0.6}
+          >
+            <Pencil size={14} color={COLORS.textSecondary} />
+          </TouchableOpacity>
+
+          <TouchableOpacity 
+            onPress={onDelete} 
+            style={styles.actionBtn}
+            activeOpacity={0.6}
+          >
+            <Trash2 size={14} color={COLORS.accentDanger} />
+          </TouchableOpacity>
+        </View>
       </View>
     </View>
   );
@@ -297,7 +309,11 @@ const styles = StyleSheet.create({
     color: COLORS.textSecondary,
     fontSize: 13,
   },
-  deleteButton: {
+  actionButtons: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  actionBtn: {
     padding: 6,
   },
   subtasksSection: {

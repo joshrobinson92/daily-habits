@@ -27,6 +27,7 @@ export default function App() {
   const [history, setHistory] = useState<HabitsHistory>({});
   const [loading, setLoading] = useState(true);
   const [showCreator, setShowCreator] = useState(false);
+  const [editingHabit, setEditingHabit] = useState<Habit | null>(null);
 
   // Format YYYY-MM-DD
   const getTodayStr = () => {
@@ -118,6 +119,11 @@ export default function App() {
     await reloadAllWidgets();
   };
 
+  const handleEditHabitClick = (habit: Habit) => {
+    setEditingHabit(habit);
+    setShowCreator(true);
+  };
+
   const handleCreateHabit = async (habitData: {
     title: string;
     frequency: "daily" | "weekly" | "monthly";
@@ -128,6 +134,43 @@ export default function App() {
     scriptureChapter?: number;
     subtasks?: { id: string; title: string }[];
   }) => {
+    if (editingHabit) {
+      let reminderId = editingHabit.reminderId;
+      if (habitData.reminderTime !== editingHabit.reminderTime) {
+        if (editingHabit.reminderId) {
+          await cancelHabitReminder(editingHabit.reminderId);
+        }
+        if (habitData.reminderTime) {
+          reminderId = await scheduleHabitReminder(editingHabit.id, habitData.title, habitData.reminderTime);
+        } else {
+          reminderId = undefined;
+        }
+      }
+
+      const updatedHabit: Habit = {
+        ...editingHabit,
+        title: habitData.title,
+        frequency: habitData.frequency,
+        reminderTime: habitData.reminderTime,
+        reminderId,
+        isScriptureSync: habitData.isScriptureSync,
+        scriptureVolume: habitData.scriptureVolume,
+        scriptureBook: habitData.scriptureBook,
+        scriptureChapter: habitData.scriptureChapter,
+        subtasks: habitData.subtasks,
+      };
+
+      const updatedHabits = await habitsRepository.saveHabit(updatedHabit);
+      setHabits(updatedHabits);
+      setEditingHabit(null);
+      setShowCreator(false);
+
+      // Sync to widgets
+      await setWidgetData(updatedHabits, history);
+      await reloadAllWidgets();
+      return;
+    }
+
     const id = `habit-${Date.now()}`;
     
     // Schedule notification if requested
@@ -226,6 +269,7 @@ export default function App() {
               completedSubtasks={completedSubtasks}
               onToggle={() => handleToggleHabit(habit.id)}
               onToggleSubtask={(subId) => handleToggleSubtask(habit.id, subId)}
+              onEdit={() => handleEditHabitClick(habit)}
               onDelete={() => handleDeleteHabit(habit)}
               onAdjustScripture={(dir) => handleAdjustScripture(habit.id, dir)}
             />
@@ -250,7 +294,11 @@ export default function App() {
     return (
       <SafeAreaView style={styles.safeContainer}>
         <StatusBar barStyle="light-content" />
-        <HabitCreator onSave={handleCreateHabit} onCancel={() => setShowCreator(false)} />
+        <HabitCreator 
+          existingHabit={editingHabit || undefined} 
+          onSave={handleCreateHabit} 
+          onCancel={() => { setShowCreator(false); setEditingHabit(null); }} 
+        />
       </SafeAreaView>
     );
   }
