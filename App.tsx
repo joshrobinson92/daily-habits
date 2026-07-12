@@ -415,11 +415,11 @@ const styles = StyleSheet.create({
   },
   tabBar: {
     flexDirection: "row",
-    height: 60,
+    height: Platform.OS === "ios" ? 76 : 70,
     borderTopWidth: 1,
     borderTopColor: COLORS.borderLight,
     backgroundColor: COLORS.background,
-    paddingBottom: Platform.OS === "ios" ? 10 : 0,
+    paddingBottom: Platform.OS === "ios" ? 18 : 12,
   },
   tabItem: {
     flex: 1,
