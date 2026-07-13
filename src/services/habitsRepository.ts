@@ -41,19 +41,19 @@ export interface HabitsHistory {
   };
 }
 
+const formatDate = (d: Date) => {
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
 /**
  * Calculates current streak for a habit
  */
 export function calculateStreak(habitId: string, history: HabitsHistory): number {
   let streak = 0;
   const checkDate = new Date();
-  
-  const formatDate = (d: Date) => {
-    const year = d.getFullYear();
-    const month = String(d.getMonth() + 1).padStart(2, '0');
-    const day = String(d.getDate()).padStart(2, '0');
-    return `${year}-${month}-${day}`;
-  };
   
   const todayStr = formatDate(checkDate);
   const completedToday = history[todayStr]?.[habitId]?.completed;
@@ -147,6 +147,41 @@ export const habitsRepository = {
           }
         } catch (firebaseErr) {
           console.warn("Firestore habits read failed, using local cache:", firebaseErr);
+        }
+      }
+
+      // Roll over scripture chapters if completed on a previous day
+      const todayStr = formatDate(new Date());
+      let hasUpdates = false;
+      for (const habit of habits) {
+        if (habit.isScriptureSync && habit.lastCompletedDate && habit.lastCompletedDate < todayStr) {
+          const nextPos = getNextChapter({
+            volumeSlug: habit.scriptureVolume || "",
+            bookSlug: habit.scriptureBook || "",
+            chapter: habit.scriptureChapter || 1
+          });
+          if (nextPos) {
+            habit.scriptureBook = nextPos.bookSlug;
+            habit.scriptureVolume = nextPos.volumeSlug;
+            habit.scriptureChapter = nextPos.chapter;
+          }
+          habit.lastCompletedDate = undefined;
+          hasUpdates = true;
+        }
+      }
+
+      if (hasUpdates) {
+        await AsyncStorage.setItem(HABITS_STORAGE_KEY, JSON.stringify(habits));
+        // Push the rolled-over chapters to firebase
+        if (user && db) {
+          try {
+            for (const h of habits) {
+              const habitRef = doc(db, "users", user.uid, "habits", h.id);
+              await setDoc(habitRef, h);
+            }
+          } catch (err) {
+            console.warn("Failed to sync rolled-over chapters to cloud:", err);
+          }
         }
       }
 
@@ -277,43 +312,12 @@ export const habitsRepository = {
           detail.completedVolume = habit.scriptureVolume;
           detail.completedBook = habit.scriptureBook;
           detail.completedChapter = `${habit.scriptureBook} ${habit.scriptureChapter}`;
-
-          // Advance scripture target to the next chapter
-          const nextPos = getNextChapter({
-            volumeSlug: habit.scriptureVolume,
-            bookSlug: habit.scriptureBook,
-            chapter: habit.scriptureChapter
-          });
-
-          if (nextPos) {
-            habit.scriptureBook = nextPos.bookSlug;
-            habit.scriptureChapter = nextPos.chapter;
-          } else {
-            console.log(`Scripture volume ${habit.scriptureVolume} completed!`);
-          }
         }
 
         history[dateString][habitId] = detail;
         habit.lastCompletedDate = dateString;
       } else {
         // Uncomplete the habit
-        if (habit.isScriptureSync && history[dateString][habitId]?.completedChapter) {
-          // Revert current target back to the completed details of this date
-          const compVolume = history[dateString][habitId].completedVolume;
-          const compBook = history[dateString][habitId].completedBook;
-          const compChapterStr = history[dateString][habitId].completedChapter;
-          
-          if (compVolume && compBook && compChapterStr) {
-            const parts = compChapterStr.split(" ");
-            const chapterNum = parseInt(parts[parts.length - 1], 10);
-            if (!isNaN(chapterNum)) {
-              habit.scriptureVolume = compVolume;
-              habit.scriptureBook = compBook;
-              habit.scriptureChapter = chapterNum;
-            }
-          }
-        }
-
         delete history[dateString][habitId];
         if (Object.keys(history[dateString]).length === 0) {
           delete history[dateString];
@@ -392,37 +396,9 @@ export const habitsRepository = {
           detail.completedVolume = habit.scriptureVolume;
           detail.completedBook = habit.scriptureBook;
           detail.completedChapter = `${habit.scriptureBook} ${habit.scriptureChapter}`;
-
-          const nextPos = getNextChapter({
-            volumeSlug: habit.scriptureVolume,
-            bookSlug: habit.scriptureBook,
-            chapter: habit.scriptureChapter
-          });
-
-          if (nextPos) {
-            habit.scriptureBook = nextPos.bookSlug;
-            habit.scriptureChapter = nextPos.chapter;
-          }
         }
       } else if (!allComplete && wasCompleted) {
         detail.completed = false;
-
-        // Revert scripture sync target if enabled
-        if (habit.isScriptureSync && detail.completedChapter) {
-          const compVolume = detail.completedVolume;
-          const compBook = detail.completedBook;
-          const compChapterStr = detail.completedChapter;
-          
-          if (compVolume && compBook && compChapterStr) {
-            const parts = compChapterStr.split(" ");
-            const chapterNum = parseInt(parts[parts.length - 1], 10);
-            if (!isNaN(chapterNum)) {
-              habit.scriptureVolume = compVolume;
-              habit.scriptureBook = compBook;
-              habit.scriptureChapter = chapterNum;
-            }
-          }
-        }
       }
 
       // If no subtasks are completed and main is unchecked, remove log to keep clean

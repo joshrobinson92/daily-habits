@@ -16,13 +16,17 @@
   },
   "devDependencies": {
     "@types/react": "~19.2.2",
+    "gh-pages": "^6.3.0",
     "typescript": "~6.0.3"
   },
+  "homepage": "https://joshrobinson92.github.io/daily-habits",
+  "private": true,
   "scripts": {
     "start": "expo start",
     "android": "expo run:android",
     "ios": "expo run:ios",
-    "web": "expo start --web"
-  },
-  "private": true
+    "web": "expo start --web",
+    "predeploy": "npx expo export --platform web",
+    "deploy": "gh-pages -d dist"
+  }
 }
